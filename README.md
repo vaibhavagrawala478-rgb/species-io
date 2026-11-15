@@ -31,7 +31,7 @@ Then `git add . && git commit && git push`.
 ### Host it on GitHub Pages
 
 1. Push this repo to GitHub (branch `main`).
-2. Repo **Settings → Pages → Source: GitHub Actions**. The workflow in `.github/workflows/pages.yml` deploys on every push.
+2. Repo **Settings → Pages → Source: Deploy from a branch → `main` / root**.
 3. Set `repo` in `config.js` (`"owner/name"`) so the Publish dialog links straight to your repo.
 
 ## Catalog entry format
