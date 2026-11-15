@@ -56,3 +56,14 @@ Then `git add . && git commit && git push`.
 
 - Uploaded/hosted games run in a sandboxed iframe but on the site's origin, so only publish builds you trust.
 - Created in [T3 Code](https://t3.codes).
+
+## Shared game list (Supabase)
+
+Out of the box, games added in the browser are private to that browser. To let everyone add and see games:
+
+1. Create a free project at supabase.com.
+2. SQL Editor → paste `supabase/schema.sql` → Run.
+3. Project Settings → API: copy the **Project URL** and the **anon public** key into `config.js` (`supabaseUrl`, `supabaseKey`). The anon key is meant to be public; never use the service-role key.
+4. Commit and push.
+
+Moderation: in Table Editor → `games`, tick `hidden` or delete a row. Link submissions are shared; uploads stay local until published through Git.

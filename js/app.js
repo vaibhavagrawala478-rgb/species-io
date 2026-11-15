@@ -98,11 +98,32 @@
   const playUrl = (id) => new URL(`play/${id}/index.html`, document.baseURI).href;
 
   /* ---------- State ---------- */
-  const state = { catalog: [], local: store.get('species.games', []), likes: new Set(store.get('species.likes', [])), q: '', platform: 'all', sort: 'new' };
+  const state = { catalog: [], remote: [], local: store.get('species.games', []), likes: new Set(store.get('species.likes', [])), q: '', platform: 'all', sort: 'new' };
   const saveLocal = () => store.set('species.games', state.local);
-  const allGames = () => [...state.local.map(g => ({ ...g, source: 'local' })), ...state.catalog.map(g => ({ ...g, source: 'catalog' }))];
+  const allGames = () => [
+    ...state.local.map(g => ({ ...g, source: 'local' })),
+    ...state.remote.map(g => ({ ...g, source: 'remote' })),
+    ...state.catalog.map(g => ({ ...g, source: 'catalog' }))
+  ];
   const findGame = (id) => allGames().find(g => g.id === id);
-  const likeCount = (g) => (g.likes || 0) + (state.likes.has(g.id) ? 1 : 0);
+  const likeCount = (g) => g.source === 'remote' ? (g.likes || 0) : (g.likes || 0) + (state.likes.has(g.id) ? 1 : 0);
+
+  /* ---------- Shared database (Supabase REST) ---------- */
+  const SB = { url: (window.SPECIES_CONFIG?.supabaseUrl || '').replace(/\/+$/, ''), key: window.SPECIES_CONFIG?.supabaseKey || '' };
+  const sbOn = !!(SB.url && SB.key);
+  const sb = (path, opts = {}) => fetch(`${SB.url}/rest/v1/${path}`, {
+    ...opts,
+    headers: { apikey: SB.key, Authorization: `Bearer ${SB.key}`, 'Content-Type': 'application/json', ...(opts.headers || {}) }
+  });
+  const fromRow = (r) => ({ id: r.id, type: 'link', url: r.url, title: r.title, platform: r.platform, author: r.author,
+    description: r.description, cover: r.cover, likes: r.likes, added: (r.created_at || '').slice(0, 10) });
+  async function loadRemote() {
+    if (!sbOn) return;
+    try {
+      const r = await sb('games?select=*&hidden=eq.false&order=created_at.desc&limit=300');
+      if (r.ok) state.remote = (await r.json()).map(fromRow);
+    } catch { /* offline: fall back to local + catalog */ }
+  }
 
   async function loadCatalog() {
     try {
@@ -182,8 +203,14 @@
   }
 
   function toggleLike(id) {
-    state.likes.has(id) ? state.likes.delete(id) : state.likes.add(id);
+    const adding = !state.likes.has(id);
+    adding ? state.likes.add(id) : state.likes.delete(id);
     store.set('species.likes', [...state.likes]);
+    const rg = state.remote.find(g => g.id === id);
+    if (rg) {
+      rg.likes = Math.max(0, (rg.likes || 0) + (adding ? 1 : -1));
+      sb('rpc/like_game', { method: 'POST', body: JSON.stringify({ game_id: id, delta: adding ? 1 : -1 }) }).catch(() => {});
+    }
     render();
   }
 
@@ -271,13 +298,34 @@
     note.textContent = id !== 'other' ? `Detected ${PLATFORM[id].name} ✓` : '';
   });
 
-  formLink.addEventListener('submit', (e) => {
+  formLink.addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = formLink.elements;
     const url = f.url.value.trim();
     if (!isHttp(url)) return showError(formLink, 'Please enter a valid http(s) link.');
     const dupe = allGames().find(g => g.url === url);
     if (dupe) return showError(formLink, `That link is already shared as “${dupe.title}”.`);
+
+    if (sbOn) {
+      const last = store.get('species.lastSubmit', 0);
+      if (Date.now() - last < 30000) return showError(formLink, 'Slow down — wait a few seconds before sharing another game.');
+      const btn = formLink.querySelector('button[type=submit]'); btn.disabled = true;
+      try {
+        const cover = f.cover.value.trim();
+        const r = await sb('games', {
+          method: 'POST', headers: { Prefer: 'return=representation' },
+          body: JSON.stringify({ title: f.title.value.trim(), url, platform: f.platform.value,
+            author: f.author.value.trim(), description: f.description.value.trim(), cover: isHttp(cover) ? cover : '' })
+        });
+        if (r.status === 409) throw new Error('That link has already been shared.');
+        if (!r.ok) throw new Error('Could not share the game. Please try again.');
+        state.remote.unshift(fromRow((await r.json())[0]));
+        store.set('species.lastSubmit', Date.now());
+        submitDlg.close(); platformTouched = false; render(); toast('Shared! Everyone can see your game');
+      } catch (err) { showError(formLink, err.message || 'Could not share the game.'); }
+      finally { btn.disabled = false; }
+      return;
+    }
     state.local.unshift({
       id: uid(), type: 'link', url, title: f.title.value.trim(), platform: f.platform.value,
       author: f.author.value.trim(), description: f.description.value.trim(),
@@ -439,7 +487,7 @@
 
   (async () => {
     render();
-    await loadCatalog();
+    await Promise.all([loadCatalog(), loadRemote()]);
     render();
     routeHash();
     if (state.local.some(g => g.type === 'upload')) ensureSW().catch(() => {});
