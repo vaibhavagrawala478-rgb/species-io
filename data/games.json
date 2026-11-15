@@ -1,0 +1,13 @@
+[
+  {
+    "id": "blob-eater",
+    "title": "Blob Eater",
+    "platform": "other",
+    "type": "hosted",
+    "url": "games/blob-eater/index.html",
+    "author": "SPECIES.IO",
+    "description": "Move your mouse (or finger) to steer. Eat smaller blobs to grow, avoid bigger ones.",
+    "cover": "",
+    "added": "2026-11-15"
+  }
+]

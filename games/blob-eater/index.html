@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Blob Eater</title>
+<style>html,body{margin:0;height:100%;background:#0e0b16;overflow:hidden;font-family:system-ui,sans-serif;color:#fff}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+#hud{position:fixed;top:10px;left:14px;font-weight:700;pointer-events:none}
+#msg{position:fixed;inset:0;display:grid;place-items:center;text-align:center;background:rgba(14,11,22,.7);cursor:pointer}
+#msg[hidden]{display:none}</style></head>
+<body><canvas id="c"></canvas><div id="hud">Size 10</div>
+<div id="msg"><div><h1 id="t">Blob Eater</h1><p id="s">Steer with mouse or finger. Eat smaller blobs. Avoid bigger ones.<br>Click to start.</p></div></div>
+<script>
+const c=document.getElementById('c'),x=c.getContext('2d'),hud=document.getElementById('hud'),msg=document.getElementById('msg');
+let W,H,me,blobs,mouse={x:0,y:0},running=false,best=0;
+function resize(){W=c.width=innerWidth;H=c.height=innerHeight}addEventListener('resize',resize);resize();
+const rnd=(a,b)=>a+Math.random()*(b-a);
+function spawn(){const r=Math.random()<.65?rnd(4,me.r*.9):rnd(me.r*1.1,me.r*2.2);const a=Math.random()*6.283,d=Math.hypot(W,H)/2+r+20;
+ blobs.push({x:W/2+Math.cos(a)*d,y:H/2+Math.sin(a)*d,r,vx:rnd(-.6,.6),vy:rnd(-.6,.6),h:rnd(0,360)})}
+function start(){me={x:W/2,y:H/2,r:10};blobs=[];for(let i=0;i<30;i++){spawn();const b=blobs[i];b.x=rnd(0,W);b.y=rnd(0,H)}running=true;msg.hidden=true}
+function end(){running=false;best=Math.max(best,Math.round(me.r));document.getElementById('t').textContent='Game over';
+ document.getElementById('s').innerHTML='You reached size '+Math.round(me.r)+' · best '+best+'<br>Click to play again.';msg.hidden=false}
+function move(e){const t=e.touches?e.touches[0]:e;mouse.x=t.clientX;mouse.y=t.clientY}
+addEventListener('mousemove',move);addEventListener('touchmove',move,{passive:true});addEventListener('touchstart',move,{passive:true});
+msg.addEventListener('click',start);
+function frame(){x.fillStyle='#0e0b16';x.fillRect(0,0,W,H);
+ if(running){const dx=mouse.x-me.x,dy=mouse.y-me.y,d=Math.hypot(dx,dy)||1,sp=Math.min(d*.06,5)*(10/Math.max(me.r,10)+.6);me.x+=dx/d*sp;me.y+=dy/d*sp;
+  for(const b of blobs){b.x+=b.vx;b.y+=b.vy}
+  for(let i=blobs.length-1;i>=0;i--){const b=blobs[i];if(Math.hypot(b.x-W/2,b.y-H/2)>Math.hypot(W,H)/2+b.r+80){blobs.splice(i,1);continue}
+   if(Math.hypot(b.x-me.x,b.y-me.y)<Math.max(b.r,me.r)){if(me.r>=b.r){me.r=Math.sqrt(me.r*me.r+b.r*b.r*.6);blobs.splice(i,1)}else{end();break}}}
+  while(blobs.length<32)spawn();hud.textContent='Size '+Math.round(me.r)}
+ if(blobs)for(const b of blobs){x.beginPath();x.arc(b.x,b.y,b.r,0,6.283);x.fillStyle=`hsl(${b.h} 70% ${b.r<me.r?'55%':'35%'})`;x.fill();x.strokeStyle=b.r<me.r?'#34d399':'#f87171';x.lineWidth=2;x.stroke()}
+ if(me){x.beginPath();x.arc(me.x,me.y,me.r,0,6.283);x.fillStyle='#c084fc';x.fill();x.strokeStyle='#fff';x.lineWidth=3;x.stroke()}
+ requestAnimationFrame(frame)}
+frame();
+</script></body></html>
